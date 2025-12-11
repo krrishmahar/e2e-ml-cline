@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e
-CLINE="$HOME/.nvm/versions/node/v24.11.1/bin/cline"
+CLINE="$HOME/.nvm/versions/node/v24.12.0/bin/cline"
 
 # Enhanced workflow script with installation checks, error handling, and edge cases
 
@@ -147,12 +147,12 @@ main() {
     if [ "$cline_installed" = true ]; then
         log "INFO" "🔧 Improving code with Cline..."
         if [ "$DRY_RUN" = true ]; then
-            log "INFO" "Dry run mode - would run: cline -y clinerules-bank/prompts/cline_improve.md"
+            log "INFO" "Dry run mode - would run: cline -y .clinerules/prompts/cline_improve.md"
         else
             if [ "$VERBOSE" = true ]; then
-                "$CLINE" -y clinerules-bank/prompts/cline_improve.md
+                "$CLINE" -y .clinerules/prompts/cline_improve.md
             else
-                "$CLINE" -y clinerules-bank/prompts/cline_improve.md > /dev/null 2>&1
+                "$CLINE" -y .clinerules/prompts/cline_improve.md > /dev/null 2>&1
             fi
             if [ $? -ne 0 ]; then
                 handle_error "Cline improvement" $?
@@ -169,12 +169,12 @@ main() {
     if [ "$cline_installed" = true ]; then
         log "INFO" "🤖 Running ML Review..."
         if [ "$DRY_RUN" = true ]; then
-            log "INFO" "Dry run mode - would run: cline -y clinerules-bank/prompts/ml_review.md"
+            log "INFO" "Dry run mode - would run: cline -y .clinerules/prompts/ml_review.md"
         else
             if [ "$VERBOSE" = true ]; then
-                "$CLINE" -y clinerules-bank/prompts/ml_review.md
+                "$CLINE" -y .clinerules/prompts/ml_review.md
             else
-                "$CLINE" -y clinerules-bank/prompts/ml_review.md > /dev/null 2>&1
+                "$CLINE" -y .clinerules/prompts/ml_review.md > /dev/null 2>&1
             fi
             if [ $? -ne 0 ]; then
                 handle_error "ML Review" $?
@@ -231,12 +231,12 @@ main() {
     if [ "$oumi_installed" = true ]; then
         log "INFO" "🚀 Deploying with Oumi..."
         if [ "$DRY_RUN" = true ]; then
-            log "INFO" "Dry run mode - would run: oumi run clinerules-bank/prompts/oumi_deploy.md"
+            log "INFO" "Dry run mode - would run: oumi run .clinerules/prompts/oumi_deploy.md"
         else
             if [ "$VERBOSE" = true ]; then
-                oumi run clinerules-bank/prompts/oumi_deploy.md
+                oumi run .clinerules/prompts/oumi_deploy.md
             else
-                oumi run clinerules-bank/prompts/oumi_deploy.md > /dev/null 2>&1
+                oumi run .clinerules/prompts/oumi_deploy.md > /dev/null 2>&1
             fi
             if [ $? -ne 0 ]; then
                 handle_error "Oumi deployment" $?
