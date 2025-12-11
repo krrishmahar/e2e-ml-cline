@@ -247,41 +247,49 @@ main() {
         log "INFO" "Skipping Oumi deployment (tool not installed)"
     fi
 
-# 8. Two-pass Coderabbit review + documentation generation
-if [ "$coderabbit_installed" = true ]; then
-    log "INFO" "📚 Running Coderabbit Pass 1 (prompt-only)..."
-    
-    coderabbit --prompt-only --base "$BRANCH" > coderabbit_pass1.md
-    if [ $? -ne 0 ]; then
-        handle_error "Coderabbit Pass 1" $?
+    # 8. Generate docs (if installed)
+    if [ "$coderabbit_installed" = true ]; then
+        log "INFO" "📚 Generating docs via Coderabbit..."
+        if [ "$DRY_RUN" = true ]; then
+            log "INFO" "Dry run mode - would run: coderabbit --prompt-only .clinerules/prompts/gh_docs.prompt.md"
+        else
+            if [ "$VERBOSE" = true ]; then
+                coderabbit --plain .clinerules/prompts/gh_docs.prompt.md
+            else
+                coderabbit --prompt-only .clinerules/prompts/gh_docs.prompt.md > /dev/null 2>&1
+            fi
+            if [ $? -ne 0 ]; then
+                handle_error "Documentation generation" $?
+                if [ "$SKIP_MISSING_TOOLS" = false ]; then
+                    return 1
+                fi
+            fi
+        fi
     else
-        log "INFO" "✍️ Cline applying Pass 1 review..."
-        $CLINE -y .clinerules/prompts/gen_docs_from_review.md
+        log "INFO" "Skipping documentation generation (tool not installed)"
     fi
 
-    log "INFO" "📚 Running Coderabbit Pass 2 (prompt-only)..."
-
-    coderabbit --prompt-only --base "$BRANCH" > coderabbit_pass2.md
-    if [ $? -ne 0 ]; then
-        handle_error "Coderabbit Pass 2" $?
+    # 9. Update Changelog (if installed)
+    if [ "$coderabbit_installed" = true ]; then
+        log "INFO" "📝 Updating Changelog..."
+        if [ "$DRY_RUN" = true ]; then
+            log "INFO" "Dry run mode - would run: coderabbit --prompt-only .clinerules/prompts/gh_changelog.mmd"
+        else
+            if [ "$VERBOSE" = true ]; then
+                coderabbit --plain .clinerules/prompts/gh_changelog.mmd
+            else
+                coderabbit --prompt-only .clinerules/prompts/gh_changelog.mmd > /dev/null 2>&1
+            fi
+            if [ $? -ne 0 ]; then
+                handle_error "Changelog update" $?
+                if [ "$SKIP_MISSING_TOOLS" = false ]; then
+                    return 1
+                fi
+            fi
+        fi
     else
-        log "INFO" "✍️ Cline applying Pass 2 review..."
-        $CLINE -y .clinerules/prompts/gen_docs_from_review.md
+        log "INFO" "Skipping Changelog update (tool not installed)"
     fi
-else
-    log "INFO" "Skipping documentation generation (Coderabbit not installed)"
-fi
-
-
-# 9. Generate Changelog (1-pass only)
-if [ "$coderabbit_installed" = true ]; then
-    log "INFO" "📝 Running Coderabbit for Changelog..."
-    
-    coderabbit --prompt-only --base "$BRANCH" > coderabbit_changelog.md
-    $CLINE -y .clinerules/prompts/gen_changelog_from_review.md
-else
-    log "INFO" "Skipping Changelog update (Coderabbit not installed)"
-fi
 
     # 10. Final message
     log "INFO" "🎉 Workflow Complete!"
