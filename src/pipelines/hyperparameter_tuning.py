@@ -1,0 +1,323 @@
+import logging
+import os
+import numpy as np
+import tensorflow as tf
+from tensorflow import keras
+from typing import Dict, List, Optional, Tuple
+import pandas as pd
+import json
+from datetime import datetime
+
+def tune_hyperparameters(X_train: np.ndarray,
+                        y_train: np.ndarray,
+                        X_valid: np.ndarray,
+                        y_valid: np.ndarray,
+                        param_grid: Dict,
+                        max_trials: int = 10,
+                        epochs: int = 50,
+                        batch_size: int = 32,
+                        random_state: int = 42) -> Tuple[Dict, pd.DataFrame]:
+    """
+    Perform hyperparameter tuning using random search.
+
+    Args:
+        X_train: Training features
+        y_train: Training target values
+        X_valid: Validation features
+        y_valid: Validation target values
+        param_grid: Dictionary of hyperparameter distributions to search
+        max_trials: Maximum number of trials to run
+        epochs: Number of training epochs per trial
+        batch_size: Batch size for training
+        random_state: Random seed for reproducibility
+
+    Returns:
+        Tuple of (best_params, results_df) where best_params is the best hyperparameter
+        combination and results_df is a DataFrame with all trial results
+
+    Example:
+        >>> param_grid = {
+        ...     'learning_rate': [0.001, 0.0001, 0.01],
+        ...     'layer_sizes': [(64, 32), (128, 64, 32), (256, 128, 64)],
+        ...     'activation': ['relu', 'selu'],
+        ...     'dropout_rate': [0.1, 0.2, 0.3]
+        ... }
+        >>> best_params, results = tune_hyperparameters(X_train, y_train, X_valid, y_valid, param_grid)
+    """
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
+
+    # Set random seeds for reproducibility
+    np.random.seed(random_state)
+    tf.random.set_seed(random_state)
+
+    try:
+        logging.info("Starting hyperparameter tuning")
+
+        # Create results directory
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        results_dir = f"tuning_results_{timestamp}"
+        os.makedirs(results_dir, exist_ok=True)
+
+        # Initialize results storage
+        results = []
+
+        # Set up random search
+        np.random.seed(random_state)
+
+        best_val_loss = float('inf')
+        best_params = None
+        best_model = None
+
+        # Run trials
+        for trial in range(max_trials):
+            logging.info(f"Starting trial {trial + 1}/{max_trials}")
+
+            # Sample hyperparameters
+            trial_params = {}
+            for param_name, param_options in param_grid.items():
+                if isinstance(param_options, list):
+                    # Random choice from list
+                    trial_params[param_name] = np.random.choice(param_options)
+                elif isinstance(param_options, dict):
+                    # Sample from distribution
+                    if param_options['type'] == 'uniform':
+                        trial_params[param_name] = np.random.uniform(
+                            param_options['min'], param_options['max']
+                        )
+                    elif param_options['type'] == 'loguniform':
+                        trial_params[param_name] = np.exp(np.random.uniform(
+                            np.log(param_options['min']), np.log(param_options['max'])
+                        ))
+                    elif param_options['type'] == 'int':
+                        trial_params[param_name] = np.random.randint(
+                            param_options['min'], param_options['max'] + 1
+                        )
+                else:
+                    trial_params[param_name] = param_options
+
+            logging.info(f"Trial {trial + 1} parameters: {trial_params}")
+
+            # Build model with sampled parameters
+            model = build_hyperparameter_model(
+                input_shape=X_train.shape[1:],
+                **trial_params
+            )
+
+            # Train model
+            history = model.fit(
+                X_train,
+                y_train,
+                epochs=epochs,
+                batch_size=batch_size,
+                validation_data=(X_valid, y_valid),
+                verbose=0,
+                callbacks=[
+                    keras.callbacks.EarlyStopping(
+                        monitor='val_loss',
+                        patience=5,
+                        restore_best_weights=True,
+                        verbose=0
+                    )
+                ]
+            )
+
+            # Evaluate on validation set
+            val_loss = min(history.history['val_loss'])
+            trial_params['val_loss'] = val_loss
+            trial_params['trial'] = trial + 1
+
+            results.append(trial_params)
+
+            # Save trial results
+            trial_results_path = os.path.join(results_dir, f"trial_{trial + 1}_results.json")
+            with open(trial_results_path, 'w') as f:
+                json.dump(trial_params, f, indent=2)
+
+            logging.info(f"Trial {trial + 1} completed - Validation Loss: {val_loss:.6f}")
+
+            # Check if this is the best trial so far
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                best_params = trial_params.copy()
+                best_model = model
+
+                # Save best model
+                best_model_path = os.path.join(results_dir, "best_model.h5")
+                best_model.save(best_model_path)
+                logging.info(f"New best model found! Validation Loss: {val_loss:.6f}")
+
+        # Save all results
+        results_df = pd.DataFrame(results)
+        results_csv_path = os.path.join(results_dir, "all_results.csv")
+        results_df.to_csv(results_csv_path, index=False)
+
+        # Save best parameters
+        best_params_path = os.path.join(results_dir, "best_params.json")
+        with open(best_params_path, 'w') as f:
+            json.dump(best_params, f, indent=2)
+
+        logging.info(f"Hyperparameter tuning completed")
+        logging.info(f"Best parameters: {best_params}")
+        logging.info(f"Best validation loss: {best_val_loss:.6f}")
+        logging.info(f"Results saved to: {results_dir}")
+
+        return best_params, results_df
+
+    except Exception as e:
+        logging.error(f"Error during hyperparameter tuning: {str(e)}")
+        raise ValueError(f"Failed to tune hyperparameters: {str(e)}")
+
+def build_hyperparameter_model(input_shape: Tuple[int, ...],
+                              learning_rate: float = 0.001,
+                              layer_sizes: Tuple[int, ...] = (64, 32),
+                              activation: str = "relu",
+                              dropout_rate: float = 0.2,
+                              use_batch_norm: bool = False,
+                              l2_reg: float = 0.0,
+                              optimizer_type: str = "adam") -> keras.Model:
+    """
+    Build a model for hyperparameter tuning.
+
+    Args:
+        input_shape: Shape of input data
+        learning_rate: Learning rate
+        layer_sizes: Tuple of layer sizes
+        activation: Activation function
+        dropout_rate: Dropout rate
+        use_batch_norm: Whether to use batch normalization
+        l2_reg: L2 regularization factor
+        optimizer_type: Type of optimizer
+
+    Returns:
+        Compiled Keras model
+    """
+    try:
+        # Set random seeds for reproducibility
+        tf.random.set_seed(42)
+
+        model = keras.models.Sequential()
+
+        # Determine appropriate initializer based on activation function
+        if activation == "selu":
+            kernel_initializer = 'lecun_normal'
+        else:
+            kernel_initializer = 'he_normal'
+
+        # Input layer
+        model.add(keras.layers.Dense(
+            layer_sizes[0],
+            activation=activation,
+            input_shape=input_shape,
+            kernel_initializer=kernel_initializer,
+            kernel_regularizer=keras.regularizers.l2(l2_reg) if l2_reg > 0 else None
+        ))
+
+        if use_batch_norm and activation != "selu":
+            model.add(keras.layers.BatchNormalization())
+
+        if dropout_rate > 0:
+            if activation == "selu":
+                model.add(keras.layers.AlphaDropout(dropout_rate))
+            else:
+                model.add(keras.layers.Dropout(dropout_rate))
+
+        # Hidden layers
+        for size in layer_sizes[1:]:
+            model.add(keras.layers.Dense(
+                size,
+                activation=activation,
+                kernel_initializer=kernel_initializer,
+                kernel_regularizer=keras.regularizers.l2(l2_reg) if l2_reg > 0 else None
+            ))
+
+            if use_batch_norm and activation != "selu":
+                model.add(keras.layers.BatchNormalization())
+
+            if dropout_rate > 0:
+                if activation == "selu":
+                    model.add(keras.layers.AlphaDropout(dropout_rate))
+                else:
+                    model.add(keras.layers.Dropout(dropout_rate))
+
+        # Output layer
+        model.add(keras.layers.Dense(1))
+
+        # Select optimizer
+        if optimizer_type == "adam":
+            optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
+        elif optimizer_type == "rmsprop":
+            optimizer = keras.optimizers.RMSprop(learning_rate=learning_rate)
+        elif optimizer_type == "nadam":
+            optimizer = keras.optimizers.Nadam(learning_rate=learning_rate)
+        elif optimizer_type == "sgd":
+            optimizer = keras.optimizers.SGD(learning_rate=learning_rate, momentum=0.9)
+        else:
+            optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
+
+        model.compile(
+            optimizer=optimizer,
+            loss="mse",
+            metrics=["mae", "mse"]
+        )
+
+        return model
+
+    except Exception as e:
+        logging.error(f"Error building hyperparameter model: {str(e)}")
+        raise ValueError(f"Failed to build model: {str(e)}")
+
+def create_default_param_grid() -> Dict:
+    """
+    Create a default parameter grid for hyperparameter tuning.
+
+    Returns:
+        Dictionary with default parameter distributions
+    """
+    return {
+        'learning_rate': {
+            'type': 'loguniform',
+            'min': 0.0001,
+            'max': 0.01
+        },
+        'layer_sizes': [
+            (64, 32),
+            (128, 64, 32),
+            (256, 128, 64),
+            (128, 64, 32, 16)
+        ],
+        'activation': ['relu', 'selu', 'elu'],
+        'dropout_rate': [0.1, 0.2, 0.3, 0.4],
+        'use_batch_norm': [True, False],
+        'l2_reg': [0.0, 0.001, 0.01],
+        'optimizer_type': ['adam', 'rmsprop', 'nadam'],
+        'batch_size': [16, 32, 64]
+    }
+
+if __name__ == "__main__":
+    # Example usage
+    from src.data.load_data import load
+    from src.data.preprocess import preprocess
+
+    # Load and preprocess data
+    X_train, X_valid, X_test, y_train, y_valid, y_test = load()
+    X_train, X_valid, X_test = preprocess(X_train, X_valid, X_test)
+
+    # Create parameter grid
+    param_grid = create_default_param_grid()
+
+    # Run hyperparameter tuning
+    best_params, results_df = tune_hyperparameters(
+        X_train, y_train, X_valid, y_valid,
+        param_grid=param_grid,
+        max_trials=5,
+        epochs=20,
+        batch_size=32
+    )
+
+    print("Hyperparameter tuning completed!")
+    print(f"Best parameters: {best_params}")
+    print(f"Results shape: {results_df.shape}")

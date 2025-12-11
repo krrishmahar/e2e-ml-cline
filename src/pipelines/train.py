@@ -17,7 +17,13 @@ def train(dry_run: bool = False,
           layer_sizes: Optional[tuple] = None,
           test_size: float = 0.2,
           validation_split: float = 0.3,
-          random_state: int = 42) -> Optional[tf.keras.Model]:
+          random_state: int = 42,
+          activation: str = "relu",
+          use_batch_norm: bool = False,
+          l2_reg: float = 0.0,
+          optimizer_type: str = "adam",
+          use_lr_schedule: bool = False,
+          lr_schedule_type: str = "cosine") -> Optional[tf.keras.Model]:
     """
     Train a neural network model on the California housing dataset.
 
@@ -30,12 +36,18 @@ def train(dry_run: bool = False,
         test_size: Proportion of data for testing
         validation_split: Proportion of training data for validation
         random_state: Random seed for reproducibility
+        activation: Activation function ('relu', 'selu', 'leaky_relu', 'elu')
+        use_batch_norm: Whether to use batch normalization
+        l2_reg: L2 regularization factor
+        optimizer_type: Type of optimizer ('adam', 'rmsprop', 'nadam', 'sgd')
+        use_lr_schedule: Whether to use learning rate scheduling
+        lr_schedule_type: Type of learning rate schedule ('cosine', 'exponential')
 
     Returns:
         Trained model if not dry_run, None otherwise
 
     Example:
-        >>> model = train(epochs=50, learning_rate=0.001)
+        >>> model = train(epochs=50, learning_rate=0.001, activation="selu", use_batch_norm=True)
         >>> model.summary()
     """
     # Configure logging
@@ -68,7 +80,11 @@ def train(dry_run: bool = False,
         model = build(
             input_shape=X_train.shape[1:],
             learning_rate=learning_rate,
-            layer_sizes=layer_sizes
+            layer_sizes=layer_sizes,
+            activation=activation,
+            use_batch_norm=use_batch_norm,
+            l2_reg=l2_reg,
+            optimizer_type=optimizer_type
         )
 
         model.summary()
@@ -83,6 +99,49 @@ def train(dry_run: bool = False,
             patience=10,
             log_dir="training_logs"
         )
+
+        # Add learning rate scheduling if enabled
+        if use_lr_schedule:
+            if lr_schedule_type == "cosine":
+                lr_schedule = keras.optimizers.schedules.CosineDecay(
+                    initial_learning_rate=learning_rate,
+                    decay_steps=epochs * (X_train.shape[0] // batch_size)
+                )
+            elif lr_schedule_type == "exponential":
+                lr_schedule = keras.optimizers.schedules.ExponentialDecay(
+                    initial_learning_rate=learning_rate,
+                    decay_steps=epochs * (X_train.shape[0] // batch_size),
+                    decay_rate=0.96,
+                    staircase=True
+                )
+            else:
+                lr_schedule = keras.optimizers.schedules.CosineDecay(
+                    initial_learning_rate=learning_rate,
+                    decay_steps=epochs * (X_train.shape[0] // batch_size)
+                )
+
+            # Recompile model with learning rate schedule
+            optimizer = model.optimizer
+            if hasattr(optimizer, 'learning_rate'):
+                optimizer.learning_rate = lr_schedule
+            else:
+                # Create new optimizer with learning rate schedule
+                if optimizer_type == "adam":
+                    new_optimizer = keras.optimizers.Adam(learning_rate=lr_schedule)
+                elif optimizer_type == "rmsprop":
+                    new_optimizer = keras.optimizers.RMSprop(learning_rate=lr_schedule)
+                elif optimizer_type == "nadam":
+                    new_optimizer = keras.optimizers.Nadam(learning_rate=lr_schedule)
+                elif optimizer_type == "sgd":
+                    new_optimizer = keras.optimizers.SGD(learning_rate=lr_schedule, momentum=0.9)
+
+                model.compile(
+                    optimizer=new_optimizer,
+                    loss="mse",
+                    metrics=["mae", "mse"]
+                )
+
+            logging.info(f"Using {lr_schedule_type} learning rate schedule")
 
         # Train model
         logging.info("Starting model training...")
@@ -130,6 +189,15 @@ if __name__ == "__main__":
     parser.add_argument("--test-size", type=float, default=0.2, help="Test set proportion")
     parser.add_argument("--validation-split", type=float, default=0.3, help="Validation set proportion")
     parser.add_argument("--random-state", type=int, default=42, help="Random seed")
+    parser.add_argument("--activation", type=str, default="relu",
+                       help="Activation function ('relu', 'selu', 'leaky_relu', 'elu')")
+    parser.add_argument("--batch-norm", action="store_true", help="Use batch normalization")
+    parser.add_argument("--l2-reg", type=float, default=0.0, help="L2 regularization factor")
+    parser.add_argument("--optimizer", type=str, default="adam",
+                       help="Optimizer type ('adam', 'rmsprop', 'nadam', 'sgd')")
+    parser.add_argument("--lr-schedule", action="store_true", help="Use learning rate scheduling")
+    parser.add_argument("--lr-schedule-type", type=str, default="cosine",
+                       help="Learning rate schedule type ('cosine', 'exponential')")
 
     args = parser.parse_args()
 
@@ -146,5 +214,11 @@ if __name__ == "__main__":
         layer_sizes=layer_sizes,
         test_size=args.test_size,
         validation_split=args.validation_split,
-        random_state=args.random_state
+        random_state=args.random_state,
+        activation=args.activation,
+        use_batch_norm=args.batch_norm,
+        l2_reg=args.l2_reg,
+        optimizer_type=args.optimizer,
+        use_lr_schedule=args.lr_schedule,
+        lr_schedule_type=args.lr_schedule_type
     )
