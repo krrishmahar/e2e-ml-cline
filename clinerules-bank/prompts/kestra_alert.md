@@ -1,6 +1,1 @@
-If Oumi reports errors, send Kestra event.
-Kestra sends an email + Slack alert with:
-- error summary
-- direct log link
-- commit hash
-
+On Oumi errors: send Kestra event → email + Slack (error summary, log link, commit hash)
