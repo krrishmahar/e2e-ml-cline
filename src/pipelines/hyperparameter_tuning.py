@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Tuple
 import pandas as pd
 import json
 from datetime import datetime
+from src.models.dnn import build
 
 def tune_hyperparameters(X_train: np.ndarray,
                         y_train: np.ndarray,
@@ -101,8 +102,8 @@ def tune_hyperparameters(X_train: np.ndarray,
 
             logging.info(f"Trial {trial + 1} parameters: {trial_params}")
 
-            # Build model with sampled parameters
-            model = build_hyperparameter_model(
+            # Build model with sampled parameters using unified build function
+            model = build(
                 input_shape=X_train.shape[1:],
                 **trial_params
             )
@@ -171,104 +172,6 @@ def tune_hyperparameters(X_train: np.ndarray,
         logging.error(f"Error during hyperparameter tuning: {str(e)}")
         raise ValueError(f"Failed to tune hyperparameters: {str(e)}")
 
-def build_hyperparameter_model(input_shape: Tuple[int, ...],
-                              learning_rate: float = 0.001,
-                              layer_sizes: Tuple[int, ...] = (64, 32),
-                              activation: str = "relu",
-                              dropout_rate: float = 0.2,
-                              use_batch_norm: bool = False,
-                              l2_reg: float = 0.0,
-                              optimizer_type: str = "adam") -> keras.Model:
-    """
-    Build a model for hyperparameter tuning.
-
-    Args:
-        input_shape: Shape of input data
-        learning_rate: Learning rate
-        layer_sizes: Tuple of layer sizes
-        activation: Activation function
-        dropout_rate: Dropout rate
-        use_batch_norm: Whether to use batch normalization
-        l2_reg: L2 regularization factor
-        optimizer_type: Type of optimizer
-
-    Returns:
-        Compiled Keras model
-    """
-    try:
-        # Set random seeds for reproducibility
-        tf.random.set_seed(42)
-
-        model = keras.models.Sequential()
-
-        # Determine appropriate initializer based on activation function
-        if activation == "selu":
-            kernel_initializer = 'lecun_normal'
-        else:
-            kernel_initializer = 'he_normal'
-
-        # Input layer
-        model.add(keras.layers.Dense(
-            layer_sizes[0],
-            activation=activation,
-            input_shape=input_shape,
-            kernel_initializer=kernel_initializer,
-            kernel_regularizer=keras.regularizers.l2(l2_reg) if l2_reg > 0 else None
-        ))
-
-        if use_batch_norm and activation != "selu":
-            model.add(keras.layers.BatchNormalization())
-
-        if dropout_rate > 0:
-            if activation == "selu":
-                model.add(keras.layers.AlphaDropout(dropout_rate))
-            else:
-                model.add(keras.layers.Dropout(dropout_rate))
-
-        # Hidden layers
-        for size in layer_sizes[1:]:
-            model.add(keras.layers.Dense(
-                size,
-                activation=activation,
-                kernel_initializer=kernel_initializer,
-                kernel_regularizer=keras.regularizers.l2(l2_reg) if l2_reg > 0 else None
-            ))
-
-            if use_batch_norm and activation != "selu":
-                model.add(keras.layers.BatchNormalization())
-
-            if dropout_rate > 0:
-                if activation == "selu":
-                    model.add(keras.layers.AlphaDropout(dropout_rate))
-                else:
-                    model.add(keras.layers.Dropout(dropout_rate))
-
-        # Output layer
-        model.add(keras.layers.Dense(1))
-
-        # Select optimizer
-        if optimizer_type == "adam":
-            optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
-        elif optimizer_type == "rmsprop":
-            optimizer = keras.optimizers.RMSprop(learning_rate=learning_rate)
-        elif optimizer_type == "nadam":
-            optimizer = keras.optimizers.Nadam(learning_rate=learning_rate)
-        elif optimizer_type == "sgd":
-            optimizer = keras.optimizers.SGD(learning_rate=learning_rate, momentum=0.9)
-        else:
-            optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
-
-        model.compile(
-            optimizer=optimizer,
-            loss="mse",
-            metrics=["mae", "mse"]
-        )
-
-        return model
-
-    except Exception as e:
-        logging.error(f"Error building hyperparameter model: {str(e)}")
-        raise ValueError(f"Failed to build model: {str(e)}")
 
 def create_default_param_grid() -> Dict:
     """

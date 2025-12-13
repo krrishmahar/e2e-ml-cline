@@ -4,11 +4,14 @@ import os
 from typing import Optional
 import numpy as np
 import tensorflow as tf
+from tensorflow import keras
 
 from src.data.load_data import load
 from src.data.preprocess import preprocess
 from src.models.dnn import build
 from src.utils.callbacks import get_callbacks
+from src.utils.learning_rate import create_learning_rate_schedule, apply_learning_rate_schedule
+
 
 def train(dry_run: bool = False,
           epochs: int = 100,
@@ -102,45 +105,12 @@ def train(dry_run: bool = False,
 
         # Add learning rate scheduling if enabled
         if use_lr_schedule:
-            if lr_schedule_type == "cosine":
-                lr_schedule = keras.optimizers.schedules.CosineDecay(
-                    initial_learning_rate=learning_rate,
-                    decay_steps=epochs * (X_train.shape[0] // batch_size)
-                )
-            elif lr_schedule_type == "exponential":
-                lr_schedule = keras.optimizers.schedules.ExponentialDecay(
-                    initial_learning_rate=learning_rate,
-                    decay_steps=epochs * (X_train.shape[0] // batch_size),
-                    decay_rate=0.96,
-                    staircase=True
-                )
-            else:
-                lr_schedule = keras.optimizers.schedules.CosineDecay(
-                    initial_learning_rate=learning_rate,
-                    decay_steps=epochs * (X_train.shape[0] // batch_size)
-                )
+            decay_steps = epochs * (X_train.shape[0] // batch_size)
+            lr_schedule = create_learning_rate_schedule(
+                lr_schedule_type, learning_rate, decay_steps
+            )
 
-            # Recompile model with learning rate schedule
-            optimizer = model.optimizer
-            if hasattr(optimizer, 'learning_rate'):
-                optimizer.learning_rate = lr_schedule
-            else:
-                # Create new optimizer with learning rate schedule
-                if optimizer_type == "adam":
-                    new_optimizer = keras.optimizers.Adam(learning_rate=lr_schedule)
-                elif optimizer_type == "rmsprop":
-                    new_optimizer = keras.optimizers.RMSprop(learning_rate=lr_schedule)
-                elif optimizer_type == "nadam":
-                    new_optimizer = keras.optimizers.Nadam(learning_rate=lr_schedule)
-                elif optimizer_type == "sgd":
-                    new_optimizer = keras.optimizers.SGD(learning_rate=lr_schedule, momentum=0.9)
-
-                model.compile(
-                    optimizer=new_optimizer,
-                    loss="mse",
-                    metrics=["mae", "mse"]
-                )
-
+            apply_learning_rate_schedule(model, optimizer_type, lr_schedule)
             logging.info(f"Using {lr_schedule_type} learning rate schedule")
 
         # Train model
@@ -156,8 +126,8 @@ def train(dry_run: bool = False,
         )
 
         # Save final model
-        os.makedirs("models", exist_ok=True)
-        model_path = os.path.join("models", "final_model.h5")
+        os.makedirs("artifact", exist_ok=True)
+        model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', "model.h5"))
         model.save(model_path)
         logging.info(f"Model saved to {model_path}")
 
@@ -181,7 +151,7 @@ def train(dry_run: bool = False,
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train California Housing Price Prediction Model")
     parser.add_argument("--dry-run", action="store_true", help="Build model without training")
-    parser.add_argument("--epochs", type=int, default=100, help="Number of training epochs")
+    parser.add_argument("--epochs", type=int, default=10, help="Number of training epochs")
     parser.add_argument("--batch-size", type=int, default=32, help="Batch size for training")
     parser.add_argument("--learning-rate", type=float, default=0.001, help="Learning rate")
     parser.add_argument("--layers", type=str, default=None,

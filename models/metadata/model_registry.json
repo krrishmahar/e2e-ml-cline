@@ -1,0 +1,20 @@
+{
+  "test_model": {
+    "20251212_003805": {
+      "timestamp": "2025-12-12T00:38:05.122232",
+      "metadata_path": "models/test_model_20251212_003805/metadata.json"
+    }
+  },
+  "test_model_keras": {
+    "20251212_003900": {
+      "timestamp": "2025-12-12T00:39:00.922943",
+      "metadata_path": "models/test_model_keras_20251212_003900/metadata.json"
+    }
+  },
+  "comprehensive_test": {
+    "20251212_004037": {
+      "timestamp": "2025-12-12T00:40:37.453771",
+      "metadata_path": "models/comprehensive_test_20251212_004037/metadata.json"
+    }
+  }
+}

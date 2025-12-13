@@ -17,20 +17,46 @@ def evaluate_model_comprehensive(model: keras.Model,
     """
     Comprehensive model evaluation with multiple metrics and visualizations.
 
+    This function performs a thorough evaluation of a trained model, calculating multiple
+    performance metrics and generating diagnostic visualizations. It supports batch processing
+    for efficient prediction on large datasets.
+
     Args:
         model: Trained Keras model
-        X_test: Test features
-        y_test: True target values
-        model_name: Name for the model (used in plots and logging)
-        save_plots: Whether to save evaluation plots
-        plot_dir: Directory to save plots
+        X_test: Test features (numpy array)
+        y_test: True target values (numpy array)
+        model_name: Name for the model (used in plots and logging, default: "model")
+        save_plots: Whether to save evaluation plots (default: True)
+        plot_dir: Directory to save plots (default: "evaluation_plots")
 
     Returns:
-        Dictionary containing all evaluation metrics
+        Dictionary containing all evaluation metrics:
+        - 'mae': Mean Absolute Error
+        - 'mse': Mean Squared Error
+        - 'rmse': Root Mean Squared Error
+        - 'r2': R-squared score
+        - 'explained_variance': Explained Variance Score
+        - 'mape': Mean Absolute Percentage Error
 
-    Example:
+    Raises:
+        ValueError: If evaluation fails due to input or prediction errors
+
+    Examples:
+        >>> # Basic usage
         >>> metrics = evaluate_model_comprehensive(model, X_test, y_test, "california_housing")
         >>> print(f"R2 Score: {metrics['r2']:.4f}")
+
+        >>> # Custom directory
+        >>> metrics = evaluate_model_comprehensive(
+        ...     model, X_test, y_test, "experiment_1",
+        ...     save_plots=True, plot_dir="custom_plots"
+        ... )
+
+    Notes:
+        - Uses batch processing with default batch size of 32 for efficient prediction
+        - Generates 4 diagnostic plots: Actual vs Predicted, Residual Plot, Error Distribution, Feature Importance
+        - Saves metrics as CSV and plots as PNG files when save_plots=True
+        - Feature importance is only available for models with accessible weights
     """
     # Configure logging
     logging.basicConfig(
@@ -45,8 +71,14 @@ def evaluate_model_comprehensive(model: keras.Model,
 
         logging.info(f"Starting comprehensive evaluation for {model_name}")
 
-        # Make predictions
-        y_pred = model.predict(X_test).flatten()
+        # Make predictions with batch processing for better performance
+        batch_size = 32
+        y_pred = []
+        for i in range(0, len(X_test), batch_size):
+            batch = X_test[i:i + batch_size]
+            batch_pred = model.predict(batch, verbose=0).flatten()
+            y_pred.extend(batch_pred)
+        y_pred = np.array(y_pred)
 
         # Calculate comprehensive metrics
         metrics = {
@@ -180,8 +212,14 @@ def compare_models(models: Dict[str, keras.Model],
             metrics['model_name'] = model_name
             comparison_results.append(metrics)
 
-            # Plot actual vs predicted for each model
-            y_pred = model.predict(X_test).flatten()
+            # Plot actual vs predicted for each model with batch processing
+            batch_size = 32
+            y_pred = []
+            for i in range(0, len(X_test), batch_size):
+                batch = X_test[i:i + batch_size]
+                batch_pred = model.predict(batch, verbose=0).flatten()
+                y_pred.extend(batch_pred)
+            y_pred = np.array(y_pred)
             plt.subplot(2, 3, i)
             plt.scatter(y_test, y_pred, alpha=0.5, label=model_name)
             plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=1)

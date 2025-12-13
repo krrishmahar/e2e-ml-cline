@@ -4,7 +4,7 @@ import os
 import numpy as np
 from typing import Union, List
 
-def predict(data: Union[List, np.ndarray], model_path: str = "models/final_model.h5") -> List[float]:
+def predict(data: Union[List, np.ndarray], model_path: str = "models/final_model.h5", batch_size: int = 32) -> List[float]:
     """
     Make predictions using a trained model.
 
@@ -56,8 +56,17 @@ def predict(data: Union[List, np.ndarray], model_path: str = "models/final_model
         else:
             data_array = data
 
-        logging.info(f"Making predictions on {len(data_array)} samples")
-        predictions = model.predict(data_array).tolist()
+        # Validate input shape
+        if len(data_array.shape) != 2:
+            raise ValueError(f"Expected 2D input array, got shape: {data_array.shape}")
+
+        if data_array.shape[1] == 0:
+            raise ValueError("Input data must have at least one feature")
+
+        logging.info(f"Making predictions on {len(data_array)} samples with {data_array.shape[1]} features")
+
+        # Use batch prediction for better performance with large datasets
+        predictions = model.predict(data_array, batch_size=batch_size, verbose=0).tolist()
 
         logging.info("Predictions completed successfully")
         return predictions
