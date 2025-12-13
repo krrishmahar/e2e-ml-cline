@@ -9,7 +9,7 @@ This guide provides instructions for deploying the FastAPI-based California Hous
 ```
 src/
 ├── app.py                  # FastAPI application
-├── artifact/
+├── artifacts/
 │   └── model.h5            # Trained Keras model
 ├── pipelines/
 │   └── train.py            # Training pipeline
@@ -39,7 +39,7 @@ This will:
 - Load the California housing dataset
 - Preprocess the data
 - Train a Deep Neural Network model
-- Save the trained model to `src/artifact/model.h5`
+- Save the trained model to `src/artifacts/model.h5`
 
 ### 3. Start the FastAPI Server
 
@@ -163,7 +163,7 @@ docker run -p 8000:8000 housing-api
 ## Troubleshooting
 
 **Model loading issues**:
-- Ensure `artifact/model.h5` exists
+- Ensure `artifacts/model.h5` exists
 - Verify TensorFlow version compatibility
 - Check file permissions
 

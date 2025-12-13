@@ -110,7 +110,7 @@ def get_model_path() -> str:
     """
     # Construct path relative to this file's location
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    model_path = os.path.join(current_dir, "artifact", "model.h5")
+    model_path = os.path.join(current_dir, "artifacts", "model.h5")
     return model_path
 
 @app.on_event("startup")

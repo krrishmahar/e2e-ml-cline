@@ -222,7 +222,7 @@ Artifacts are exported by Kestra via:
 
 ```yaml
 outputFiles:
-  - "artifact/**"
+  - "artifacts/**"
 ```
 
 ---
