@@ -126,8 +126,8 @@ def train(dry_run: bool = False,
         )
 
         # Save final model
-        os.makedirs("artifact", exist_ok=True)
-        model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', "model.h5"))
+        os.makedirs("artifacts", exist_ok=True)
+        model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', "artifacts", "model.h5"))
         model.save(model_path)
         logging.info(f"Model saved to {model_path}")
 
