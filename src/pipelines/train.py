@@ -100,7 +100,7 @@ def train(dry_run: bool = False,
         callbacks = get_callbacks(
             model_name="california_housing",
             patience=10,
-            log_dir="training_logs"
+            log_dir="logs/training_logs"
         )
 
         # Add learning rate scheduling if enabled
