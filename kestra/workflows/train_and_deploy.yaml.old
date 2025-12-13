@@ -1,0 +1,42 @@
+id: train_and_deploy
+namespace: ml.pipeline
+
+triggers:
+  - id: github_push
+    type: io.kestra.plugin.github.Trigger
+    accessToken: "Z2hwX1JuOEVCdDV1elB0UFltdWJzSW9wUlp4ZjRMMUo0RTJ0UU50ZQ=="
+    repository: krrish1010/e2e-ml-cline
+    branch: main
+    events:
+      - push
+
+tasks:
+  - id: train_model
+    type: io.kestra.plugin.scripts.python.Python
+    script: |
+      import subprocess
+      subprocess.run(["python", "src/model/train.py"], check=True)
+
+  - id: upload_to_huggingface
+    type: io.kestra.plugin.scripts.python.Python
+    env:
+      HF_TOKEN: "{{ secret('HF_TOKEN') }}"
+    script: |
+      import subprocess
+      import os
+      
+      repo = "krrish1010/Cline_train"
+      
+      subprocess.run(["pip", "install", "huggingface_hub"], check=True)
+
+      from huggingface_hub import HfApi, upload_file
+
+      api = HfApi()
+
+      api.upload_file(
+          path_or_fileobj="artifacts/model.h5",
+          path_in_repo="model/model.h5",
+          repo_id=repo,
+          repo_type="space"
+      )
+

@@ -1,0 +1,103 @@
+id: train_and_deploy
+namespace: ml.pipeline
+description: |
+  End-to-end ML pipeline:
+  - Triggered by GitHub push
+  - Clone repo
+  - Train DNN model
+  - Upload model to Hugging Face
+
+triggers:
+  - id: github_push
+    type: io.kestra.plugin.github.Trigger
+    repository: krrish1010/e2e-ml-cline
+    branch: main
+    events:
+      - push
+    # accessToken: "{{ secret('GITHUB_TOKEN') }}"
+    accessToken: "Z2hwX1JuOEVCdDV1elB0UFltdWJzSW9wUlp4ZjRMMUo0RTJ0UU50ZQ=="
+
+# -----------------------------------------------------------------------------
+# TASKS
+# -----------------------------------------------------------------------------
+tasks:
+
+  # ---------------------------------------------------------------------------
+  # 1. Clone GitHub repository
+  # ---------------------------------------------------------------------------
+  - id: clone_repo
+    type: io.kestra.plugin.git.Clone
+    url: https://github.com/krrish1010/e2e-ml-cline.git
+    branch: main
+
+  # ---------------------------------------------------------------------------
+  # 2. Train model (DNN)
+  # ---------------------------------------------------------------------------
+  - id: train_model
+    type: io.kestra.plugin.scripts.python.Python
+    runner: DOCKER
+    docker:
+      image: python:3.10
+    workingDirectory: "{{ outputs.clone_repo.directory }}"
+    script: |
+      import os
+      import subprocess
+
+      print("📂 Working directory:", os.getcwd())
+      print("📄 Files:", os.listdir("."))
+
+      # install dependencies
+      subprocess.run(
+          ["pip", "install", "-r", "requirements.txt"],
+          check=True
+      )
+
+      # run training
+      subprocess.run(
+          ["python", "src/model/train.py"],
+          check=True
+      )
+
+      print("✅ Training completed")
+
+  # ---------------------------------------------------------------------------
+  # 3. Upload model to Hugging Face
+  # ---------------------------------------------------------------------------
+  - id: upload_to_huggingface
+    type: io.kestra.plugin.scripts.python.Python
+    runner: DOCKER
+    docker:
+      image: python:3.10
+    workingDirectory: "{{ outputs.clone_repo.directory }}"
+    env:
+      # HF_TOKEN: "{{ secret('HF_TOKEN') }}"
+      HF_TOKEN: "aGZfZFlVbXVxbG5mc1RjdWp6V0lPZVlNbmNwZXpvbFZTcVBSUg=="
+    script: |
+      import os
+      import subprocess
+      from huggingface_hub import HfApi
+
+      # install HF SDK
+      subprocess.run(
+          ["pip", "install", "huggingface_hub"],
+          check=True
+      )
+
+      repo_id = "krrish1010/Cline_train"
+
+      api = HfApi(token=os.environ["HF_TOKEN"])
+
+      model_path = "artifacts/model.h5"
+
+      if not os.path.exists(model_path):
+          raise FileNotFoundError(f"❌ Model not found at {model_path}")
+
+      api.upload_file(
+          path_or_fileobj=model_path,
+          path_in_repo="model/model.h5",
+          repo_id=repo_id,
+          repo_type="model"
+      )
+
+      print("🚀 Model uploaded to Hugging Face")
+
