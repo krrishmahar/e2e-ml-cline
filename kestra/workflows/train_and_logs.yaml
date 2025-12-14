@@ -1,0 +1,67 @@
+id: train_and_deploy_model
+namespace: ml.pipeline
+
+description: |
+  End-to-end ML pipeline:
+  - Clone repo
+  - Train DNN model
+  - Upload model to Hugging Face
+
+tasks:
+  # 1. Clone repository
+  - id: clone_repo
+    type: io.kestra.plugin.git.Clone
+    url: https://github.com/krrishmahar/e2e-ml-cline.git
+    branch: main
+
+  # 2. Set Up dependencies
+  - id: train_model
+    type: io.kestra.plugin.scripts.python.Commands
+    packageManager: PIP
+    taskRunner:
+      type: io.kestra.plugin.scripts.runner.docker.Docker
+    containerImage: python:3.11-slim
+    commands:
+      - apt-get update
+      - apt-get install -y git
+      - git clone https://github.com/krrishmahar/e2e-ml-cline.git repo
+      - cd repo
+      - pip install -r requirements.txt
+      - python -m src.pipelines.train --epochs 1
+      - cd ..
+      - mkdir -p artifacts
+      - cp -r repo/src/artifacts/* artifacts/
+      - ls -R artifacts
+    outputFiles:
+      - "artifacts/**"
+  
+  - id: fail
+    type: io.kestra.plugin.scripts.shell.Commands
+    taskRunner: 
+      type: io.kestra.plugin.core.runner.Process
+    commands:
+      - 'echo "The current execution is: {{ execution.id }}"'
+      - exit 1
+
+errors:
+  - id: email_on_failure
+    type: io.kestra.plugin.resend.email.Send
+    from: "delivered@resend.dev"
+    to:
+      - krrishmahar5@gmail.com
+    subject: "❌ Kestra Flow Failed"
+    html: |
+      <h3>Kestra Execution Failed</h3>
+      <p><b>Flow:</b> {{ flow.id }}</p>
+      <p><b>Execution:</b> {{ execution.id }}</p>
+      <p>Please open the execution in Kestra UI to view full error logs.</p>
+    apiKey: "re_YL9jop8M_2XnjHBwn2WRzRLZ92hGPFpXW"
+    
+
+  - id: slack_on_failure
+    type: io.kestra.plugin.notifications.slack.SlackIncomingWebhook
+    url: "https://hooks.slack.com/services/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"
+    payload: |
+      {
+        "text": "Failure alert for flow {{ flow.namespace }}.{{ flow.id }} with ID {{ execution.id }}"
+      }
