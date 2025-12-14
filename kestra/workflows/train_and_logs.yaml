@@ -55,12 +55,12 @@ errors:
       <p><b>Flow:</b> {{ flow.id }}</p>
       <p><b>Execution:</b> {{ execution.id }}</p>
       <p>Please open the execution in Kestra UI to view full error logs.</p>
-    apiKey: "re_YL9jop8M_2XnjHBwn2WRzRLZ92hGPFpXW"
+    apiKey: "{{ secret('RESEND_API_KEY') }}"
     
 
   - id: slack_on_failure
     type: io.kestra.plugin.notifications.slack.SlackIncomingWebhook
-    url: "https://hooks.slack.com/services/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"
+    url: "{{ secret('SLACK_WEBHOOK') }}"
     payload: |
       {
         "text": "Failure alert for flow {{ flow.namespace }}.{{ flow.id }} with ID {{ execution.id }}"
